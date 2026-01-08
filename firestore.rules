@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Offices collection - public read, authenticated write
+    match /offices/{officeId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Crowd reports collection - public read, authenticated write
+    match /crowd_reports/{reportId} {
+      allow read: if true;
+      allow create: if request.auth != null 
+                    && request.resource.data.keys().hasAll(['officeId', 'crowdLevel', 'timestamp'])
+                    && request.resource.data.crowdLevel in ['low', 'medium', 'high']
+                    && request.resource.data.timestamp is int;
+      allow update, delete: if false; // Reports are immutable
+    }
+  }
+}
