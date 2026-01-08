@@ -55,6 +55,48 @@ a {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Ambient Spiral Background Animations */
+@keyframes ambient-spiral-rotate {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.1);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@keyframes ambient-spiral-rotate-reverse {
+  0% {
+    transform: rotate(360deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(0.9);
+  }
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+}
+
+@keyframes ambient-spiral-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.12;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.18;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ambient-spiral] {
+    animation: none !important;
+  }
+}
+
 /* Mobile-first optimizations */
 @media (max-width: 640px) {
   body {
