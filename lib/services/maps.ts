@@ -45,13 +45,14 @@ export const getCurrentLocation = (): Promise<GeolocationPosition> => {
 
 /**
  * Find nearby offices within a radius (in km)
+ * Returns offices with distance property added
  */
-export const findNearbyOffices = (
+export const findNearbyOffices = <T extends { latitude: number; longitude: number }>(
   userLat: number,
   userLon: number,
-  offices: Array<{ latitude: number; longitude: number }>,
+  offices: T[],
   radiusKm: number = 10
-) => {
+): Array<T & { distance: number }> => {
   return offices
     .map((office) => ({
       ...office,

@@ -228,8 +228,9 @@ export const getRecentCrowdReports = async (
   
   const reportsRef = collection(db, 'crowd_reports');
   
-  // Firestore requires composite index for multiple where clauses with orderBy
-  // Query all reports for office, then filter by time in memory (more reliable)
+  // Firestore requires composite index for officeId + timestamp queries
+  // Create index at: https://console.firebase.google.com/project/_/firestore/indexes
+  // Or deploy firestore.indexes.json using: firebase deploy --only firestore:indexes
   const q = query(
     reportsRef,
     where('officeId', '==', officeId),

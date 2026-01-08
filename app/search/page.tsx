@@ -141,17 +141,23 @@ export default function SearchPage() {
       
       // Load crowd data for nearby offices (aggregated from last 60 minutes)
       for (const officeWithDistance of nearby) {
+        const officeId = officeWithDistance.id;
+        if (!officeId) {
+          console.error('[Location] Office missing id:', officeWithDistance);
+          continue;
+        }
+        
         try {
-          const reports = await getRecentCrowdReports(officeWithDistance.id, 60, 100);
+          const reports = await getRecentCrowdReports(officeId, 60, 100);
           const aggregated = aggregateCrowdData(reports, 60);
-          updatedData[officeWithDistance.id] = { 
+          updatedData[officeId] = { 
             crowdLevel: aggregated.crowdLevel, 
             waitingTime: aggregated.averageWaitTime, 
             distance: officeWithDistance.distance 
           };
         } catch (err) {
-          console.error(`Error loading crowd data for ${officeWithDistance.id}:`, err);
-          updatedData[officeWithDistance.id] = { 
+          console.error(`Error loading crowd data for ${officeId}:`, err);
+          updatedData[officeId] = { 
             crowdLevel: 'medium', 
             waitingTime: 30, 
             distance: officeWithDistance.distance 
@@ -160,7 +166,9 @@ export default function SearchPage() {
       }
 
       setOfficeData(updatedData);
-      setOffices(nearby.map(({ distance, ...office }) => office));
+      // Extract offices from nearby results (remove distance property)
+      const nearbyOffices: Office[] = nearby.map(({ distance, ...office }) => office);
+      setOffices(nearbyOffices);
       setSelectedCity(''); // Clear city filter since we're showing nearby offices
       setLoading(false);
       
