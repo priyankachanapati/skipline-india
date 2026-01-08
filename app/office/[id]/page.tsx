@@ -44,6 +44,33 @@ export default function OfficeDetailPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [nearbyOffices, setNearbyOffices] = useState<Office[]>([]);
   const [loadingNearby, setLoadingNearby] = useState(false);
+  const [selectedCrowdLevel, setSelectedCrowdLevel] = useState<CrowdLevel | null>(null);
+  const [reportFeedback, setReportFeedback] = useState('');
+  const [animatedWaitTime, setAnimatedWaitTime] = useState(0);
+
+  // Animate wait time count-up
+  useEffect(() => {
+    if (waitingTime > 0) {
+      setAnimatedWaitTime(0);
+      const duration = 1000; // 1 second
+      const steps = 30;
+      const increment = waitingTime / steps;
+      const stepDuration = duration / steps;
+      
+      let current = 0;
+      const timer = setInterval(() => {
+        current += increment;
+        if (current >= waitingTime) {
+          setAnimatedWaitTime(waitingTime);
+          clearInterval(timer);
+        } else {
+          setAnimatedWaitTime(Math.floor(current));
+        }
+      }, stepDuration);
+      
+      return () => clearInterval(timer);
+    }
+  }, [waitingTime]);
 
   // Check auth status
   useEffect(() => {
@@ -194,6 +221,8 @@ export default function OfficeDetailPage() {
 
     setSubmitting(true);
     setError('');
+    setSelectedCrowdLevel(level);
+    setReportFeedback('');
 
     try {
       const user = getCurrentUser();
@@ -208,11 +237,17 @@ export default function OfficeDetailPage() {
       setCrowdLevel(newLevel);
       setWaitingTime(newTime);
       setLastUpdated(updated);
+      setReportFeedback('Thanks for updating!');
 
-      alert('Thank you! Your report has been submitted.');
+      // Clear feedback after 3 seconds
+      setTimeout(() => {
+        setReportFeedback('');
+        setSelectedCrowdLevel(null);
+      }, 3000);
     } catch (err) {
       setError('Failed to submit report. Please try again.');
       console.error('Error submitting report:', err);
+      setSelectedCrowdLevel(null);
     } finally {
       setSubmitting(false);
     }
@@ -305,7 +340,8 @@ export default function OfficeDetailPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2, duration: 0.4 }}
-        className="glass-card rounded-2xl shadow-soft p-6 mb-6"
+        whileHover={{ y: -2, transition: { duration: 0.2 } }}
+        className="glass-card rounded-2xl shadow-soft p-6 mb-6 hover:shadow-soft-lg transition-all"
       >
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-dark-50">Current Status</h2>
@@ -317,26 +353,58 @@ export default function OfficeDetailPage() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3, duration: 0.3 }}
-            className="bg-gradient-to-br from-dark-800/50 to-dark-700/50 rounded-xl p-4 border border-white/5"
+            whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+            className="bg-gradient-to-br from-dark-800/50 to-dark-700/50 rounded-xl p-4 border border-white/5 hover:border-primary-500/20 transition-all"
           >
             <p className="text-sm text-dark-400 mb-1">Estimated Waiting Time</p>
             <motion.p
               key={waitingTime}
               initial={{ scale: 1.2, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
               className="text-3xl font-bold text-primary-400"
             >
-              {waitingTime} min
+              {animatedWaitTime || waitingTime} min
             </motion.p>
+            {/* Confidence/Progress bar */}
+            <motion.div
+              className="mt-3 h-1 bg-dark-700 rounded-full overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+            >
+              <motion.div
+                className="h-full bg-primary-500 rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min((waitingTime / 60) * 100, 100)}%` }}
+                transition={{ duration: 1, delay: 0.6, ease: 'easeOut' }}
+              />
+            </motion.div>
           </motion.div>
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.35, duration: 0.3 }}
-            className="bg-gradient-to-br from-dark-800/50 to-dark-700/50 rounded-xl p-4 border border-white/5"
+            whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+            className="bg-gradient-to-br from-dark-800/50 to-dark-700/50 rounded-xl p-4 border border-white/5 hover:border-primary-500/20 transition-all"
           >
-            <p className="text-sm text-dark-400 mb-1">Last Updated</p>
+            <div className="flex items-center gap-2 mb-1">
+              <p className="text-sm text-dark-400">Last Updated</p>
+              {lastUpdated && (
+                <motion.span
+                  className="w-2 h-2 rounded-full bg-primary-400"
+                  animate={{
+                    scale: [1, 1.3, 1],
+                    opacity: [1, 0.6, 1],
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                  }}
+                />
+              )}
+            </div>
             <p className="text-lg font-semibold text-dark-200">
               {lastUpdated ? formatTimestamp(lastUpdated) : 'No recent reports'}
             </p>
@@ -357,32 +425,92 @@ export default function OfficeDetailPage() {
             <motion.button
               onClick={() => handleSubmitReport('low')}
               disabled={submitting}
-              whileHover={{ scale: 1.05 }}
+              whileHover={{ scale: 1.05, boxShadow: '0 0 20px rgba(20, 184, 166, 0.4)' }}
               whileTap={{ scale: 0.95 }}
-              className="px-4 py-2 bg-crowd-low text-white rounded-xl hover:opacity-90 transition-all disabled:opacity-50 text-sm font-medium shadow-soft"
+              className={`px-4 py-2 bg-crowd-low text-white rounded-xl transition-all disabled:opacity-50 text-sm font-medium shadow-soft ${
+                selectedCrowdLevel === 'low' ? 'ring-2 ring-teal-300 ring-offset-2 ring-offset-dark-900' : ''
+              }`}
             >
-              Low
+              {selectedCrowdLevel === 'low' && submitting ? (
+                <span className="flex items-center gap-2">
+                  <motion.span
+                    className="w-3 h-3 border-2 border-white border-t-transparent rounded-full"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+                  />
+                  Submitting...
+                </span>
+              ) : (
+                'Low'
+              )}
             </motion.button>
             <motion.button
               onClick={() => handleSubmitReport('medium')}
               disabled={submitting}
-              whileHover={{ scale: 1.05 }}
+              whileHover={{ scale: 1.05, boxShadow: '0 0 20px rgba(245, 158, 11, 0.4)' }}
               whileTap={{ scale: 0.95 }}
-              className="px-4 py-2 bg-crowd-medium text-white rounded-xl hover:opacity-90 transition-all disabled:opacity-50 text-sm font-medium shadow-soft"
+              className={`px-4 py-2 bg-crowd-medium text-white rounded-xl transition-all disabled:opacity-50 text-sm font-medium shadow-soft ${
+                selectedCrowdLevel === 'medium' ? 'ring-2 ring-amber-300 ring-offset-2 ring-offset-dark-900' : ''
+              }`}
             >
-              Medium
+              {selectedCrowdLevel === 'medium' && submitting ? (
+                <span className="flex items-center gap-2">
+                  <motion.span
+                    className="w-3 h-3 border-2 border-white border-t-transparent rounded-full"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+                  />
+                  Submitting...
+                </span>
+              ) : (
+                'Medium'
+              )}
             </motion.button>
             <motion.button
               onClick={() => handleSubmitReport('high')}
               disabled={submitting}
-              whileHover={{ scale: 1.05 }}
+              whileHover={{ scale: 1.05, boxShadow: '0 0 20px rgba(239, 68, 68, 0.4)' }}
               whileTap={{ scale: 0.95 }}
-              className="px-4 py-2 bg-crowd-high text-white rounded-xl hover:opacity-90 transition-all disabled:opacity-50 text-sm font-medium shadow-soft"
+              className={`px-4 py-2 bg-crowd-high text-white rounded-xl transition-all disabled:opacity-50 text-sm font-medium shadow-soft ${
+                selectedCrowdLevel === 'high' ? 'ring-2 ring-red-300 ring-offset-2 ring-offset-dark-900' : ''
+              }`}
             >
-              High
+              {selectedCrowdLevel === 'high' && submitting ? (
+                <span className="flex items-center gap-2">
+                  <motion.span
+                    className="w-3 h-3 border-2 border-white border-t-transparent rounded-full"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+                  />
+                  Submitting...
+                </span>
+              ) : (
+                'High'
+              )}
             </motion.button>
           </div>
-          <AnimatePresence>
+          <AnimatePresence mode="wait">
+            {reportFeedback && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                className="flex items-center gap-2 mt-2 text-primary-400 text-sm"
+              >
+                <motion.svg
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 200 }}
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </motion.svg>
+                {reportFeedback}
+              </motion.div>
+            )}
             {error && (
               <motion.p
                 initial={{ opacity: 0, y: -10 }}
@@ -405,15 +533,21 @@ export default function OfficeDetailPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.4 }}
-            className="glass-card rounded-2xl shadow-soft p-6 mb-6"
+            whileHover={{ y: -2, transition: { duration: 0.2 } }}
+            className="glass-card rounded-2xl shadow-soft p-6 mb-6 hover:shadow-soft-lg transition-all"
           >
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xl font-bold text-dark-50 flex items-center">
                 🤖 AI Insight
               </h2>
-              <span className="text-xs text-dark-400 bg-dark-800 px-2 py-1 rounded-lg border border-white/10">
-                Powered by Gemini
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-dark-400 bg-dark-800 px-2 py-1 rounded-lg border border-white/10">
+                  Powered by Gemini
+                </span>
+                <span className="text-xs text-dark-500 bg-dark-800/50 px-2 py-1 rounded-lg border border-white/5">
+                  Insight confidence: Medium
+                </span>
+              </div>
             </div>
             {loadingAI ? (
               <LoadingSpinner />
@@ -424,7 +558,22 @@ export default function OfficeDetailPage() {
                 transition={{ delay: 0.2 }}
                 className="text-dark-200 leading-relaxed"
               >
-                {aiExplanation || 'Unable to generate AI insight at this time.'}
+                {aiExplanation.split(/(moderately busy|morning hours|afternoon|evening|peak|low crowd|high crowd|best time|avoid)/gi).map((part, index) => {
+                  const isHighlight = /moderately busy|morning hours|afternoon|evening|peak|low crowd|high crowd|best time|avoid/i.test(part);
+                  return isHighlight ? (
+                    <motion.span
+                      key={index}
+                      initial={{ backgroundColor: 'transparent' }}
+                      animate={{ backgroundColor: 'rgba(99, 102, 241, 0.15)' }}
+                      transition={{ duration: 0.3, delay: 0.3 + index * 0.1 }}
+                      className="px-1 rounded font-medium text-primary-300"
+                    >
+                      {part}
+                    </motion.span>
+                  ) : (
+                    <span key={index}>{part}</span>
+                  );
+                })}
               </motion.p>
             )}
           </motion.div>
@@ -439,7 +588,8 @@ export default function OfficeDetailPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.4 }}
-            className="glass-card rounded-2xl shadow-soft p-6 mb-6"
+            whileHover={{ y: -2, transition: { duration: 0.2 } }}
+            className="glass-card rounded-2xl shadow-soft p-6 mb-6 hover:shadow-soft-lg transition-all"
           >
             <h2 className="text-xl font-bold text-dark-50 mb-3 flex items-center">
               ⏰ Best Time to Visit
@@ -465,7 +615,8 @@ export default function OfficeDetailPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4, duration: 0.4 }}
-        className="glass-card rounded-2xl shadow-soft p-6 mb-6"
+        whileHover={{ y: -2, transition: { duration: 0.2 } }}
+        className="glass-card rounded-2xl shadow-soft p-6 mb-6 hover:shadow-soft-lg transition-all"
       >
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-dark-50">Location</h2>
@@ -486,7 +637,8 @@ export default function OfficeDetailPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={{ delay: 0.5, duration: 0.4 }}
-            className="glass-card rounded-2xl shadow-soft p-6 mb-6"
+            whileHover={{ y: -2, transition: { duration: 0.2 } }}
+            className="glass-card rounded-2xl shadow-soft p-6 mb-6 hover:shadow-soft-lg transition-all"
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-dark-50">Nearby Offices</h2>
