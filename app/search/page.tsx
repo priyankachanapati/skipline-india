@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getOfficesByCityAndType, Office, OfficeType } from '@/lib/firebase/firestore';
 import { getRecentCrowdReports } from '@/lib/firebase/firestore';
-import { calculateCrowdLevel, estimateWaitingTime } from '@/lib/services/crowdAggregation';
+import { calculateCrowdLevel, estimateWaitingTime, aggregateCrowdData } from '@/lib/services/crowdAggregation';
 import OfficeCard from '@/components/OfficeCard';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { getCurrentLocation, findNearbyOffices } from '@/lib/services/maps';
@@ -73,14 +73,16 @@ export default function SearchPage() {
         );
         setOffices(data);
 
-        // Load crowd data for each office
+        // Load crowd data for each office (aggregated from last 60 minutes)
         const crowdData: Record<string, { crowdLevel: string; waitingTime: number }> = {};
         for (const office of data) {
           try {
-            const reports = await getRecentCrowdReports(office.id, 10);
-            const crowdLevel = calculateCrowdLevel(reports);
-            const waitingTime = estimateWaitingTime(crowdLevel);
-            crowdData[office.id] = { crowdLevel, waitingTime };
+            const reports = await getRecentCrowdReports(office.id, 60, 100);
+            const aggregated = aggregateCrowdData(reports, 60);
+            crowdData[office.id] = { 
+              crowdLevel: aggregated.crowdLevel, 
+              waitingTime: aggregated.averageWaitTime 
+            };
           } catch (err) {
             console.error(`Error loading crowd data for ${office.id}:`, err);
           }
@@ -137,13 +139,16 @@ export default function SearchPage() {
       
       const updatedData: Record<string, { crowdLevel: string; waitingTime: number; distance: number }> = {};
       
-      // Load crowd data for nearby offices
+      // Load crowd data for nearby offices (aggregated from last 60 minutes)
       for (const officeWithDistance of nearby) {
         try {
-          const reports = await getRecentCrowdReports(officeWithDistance.id, 10);
-          const crowdLevel = calculateCrowdLevel(reports);
-          const waitingTime = estimateWaitingTime(crowdLevel);
-          updatedData[officeWithDistance.id] = { crowdLevel, waitingTime, distance: officeWithDistance.distance };
+          const reports = await getRecentCrowdReports(officeWithDistance.id, 60, 100);
+          const aggregated = aggregateCrowdData(reports, 60);
+          updatedData[officeWithDistance.id] = { 
+            crowdLevel: aggregated.crowdLevel, 
+            waitingTime: aggregated.averageWaitTime, 
+            distance: officeWithDistance.distance 
+          };
         } catch (err) {
           console.error(`Error loading crowd data for ${officeWithDistance.id}:`, err);
           updatedData[officeWithDistance.id] = { 

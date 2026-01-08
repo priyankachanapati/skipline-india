@@ -14,6 +14,8 @@ import {
   estimateWaitingTime,
   getLastUpdatedTime,
   formatTimestamp,
+  aggregateCrowdData,
+  AggregatedCrowdData,
 } from '@/lib/services/crowdAggregation';
 import { getCurrentUser, signInAnon, signInWithGoogle } from '@/lib/firebase/auth';
 import { getOfficesByCity, Office as OfficeType } from '@/lib/firebase/firestore';
@@ -32,6 +34,8 @@ export default function OfficeDetailPage() {
   const [crowdLevel, setCrowdLevel] = useState<CrowdLevel>('medium');
   const [waitingTime, setWaitingTime] = useState(30);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [reportCount, setReportCount] = useState(0);
+  const [userReportCount, setUserReportCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -65,15 +69,26 @@ export default function OfficeDetailPage() {
 
         setOffice(officeData);
 
-        // Load crowd reports
-        const reports = await getRecentCrowdReports(officeId, 10);
-        const level = calculateCrowdLevel(reports);
-        const time = estimateWaitingTime(level);
-        const updated = getLastUpdatedTime(reports);
+        // Load crowd reports from last 60 minutes (prioritizes user reports)
+        const reports = await getRecentCrowdReports(officeId, 60, 100);
+        
+        // Aggregate crowd data: computes level, average wait time, report count, last updated
+        const aggregated = aggregateCrowdData(reports, 60);
+        
+        console.log('[Office Detail] Aggregated crowd data:', {
+          officeId,
+          crowdLevel: aggregated.crowdLevel,
+          averageWaitTime: aggregated.averageWaitTime,
+          reportCount: aggregated.reportCount,
+          userReportCount: aggregated.userReportCount,
+          lastUpdated: aggregated.lastUpdated ? new Date(aggregated.lastUpdated).toISOString() : null,
+        });
 
-        setCrowdLevel(level);
-        setWaitingTime(time);
-        setLastUpdated(updated);
+        setCrowdLevel(aggregated.crowdLevel);
+        setWaitingTime(aggregated.averageWaitTime);
+        setLastUpdated(aggregated.lastUpdated);
+        setReportCount(aggregated.reportCount);
+        setUserReportCount(aggregated.userReportCount);
 
         // Load nearby offices from same city
         setLoadingNearby(true);
@@ -197,15 +212,15 @@ export default function OfficeDetailPage() {
       const user = getCurrentUser();
       await submitCrowdReport(officeId, level, user?.uid);
 
-      // Reload crowd data
-      const reports = await getRecentCrowdReports(officeId, 10);
-      const newLevel = calculateCrowdLevel(reports);
-      const newTime = estimateWaitingTime(newLevel);
-      const updated = getLastUpdatedTime(reports);
+      // Reload crowd data with aggregation
+      const reports = await getRecentCrowdReports(officeId, 60, 100);
+      const aggregated = aggregateCrowdData(reports, 60);
 
-      setCrowdLevel(newLevel);
-      setWaitingTime(newTime);
-      setLastUpdated(updated);
+      setCrowdLevel(aggregated.crowdLevel);
+      setWaitingTime(aggregated.averageWaitTime);
+      setLastUpdated(aggregated.lastUpdated);
+      setReportCount(aggregated.reportCount);
+      setUserReportCount(aggregated.userReportCount);
 
       alert('Thank you! Your report has been submitted.');
     } catch (err) {
@@ -290,19 +305,26 @@ export default function OfficeDetailPage() {
 
         <div className="grid md:grid-cols-2 gap-4 mb-6">
           <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-sm text-gray-600 mb-1">Estimated Waiting Time</p>
+            <p className="text-sm text-gray-600 mb-1">Average Waiting Time</p>
             <p className="text-3xl font-bold text-gray-900">{waitingTime} min</p>
+            <p className="text-xs text-gray-500 mt-1">Based on {reportCount} report{reportCount !== 1 ? 's' : ''} (last 60 min)</p>
           </div>
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-sm text-gray-600 mb-1">Last Updated</p>
             <p className="text-lg font-semibold text-gray-900">
               {lastUpdated ? formatTimestamp(lastUpdated) : 'No recent reports'}
             </p>
+            {userReportCount > 0 && (
+              <p className="text-xs text-gray-500 mt-1">
+                {userReportCount} user report{userReportCount !== 1 ? 's' : ''} in last hour
+              </p>
+            )}
           </div>
         </div>
         <div className="mb-4">
           <p className="text-xs text-gray-500">
-            📊 Data Source: User-reported (Firebase Firestore)
+            📊 Data Source: {userReportCount > 0 ? 'User-reported' : 'Aggregated'} (Firebase Firestore, last 60 minutes)
+            {userReportCount > 0 && <span className="ml-1">• User data prioritized</span>}
           </p>
         </div>
 

@@ -36,12 +36,15 @@ export interface Office {
   address?: string;
 }
 
+export type ReportSource = 'user' | 'seed' | 'system';
+
 export interface CrowdReport {
   id: string;
   officeId: string;
   crowdLevel: CrowdLevel;
   timestamp: number; // Unix timestamp in milliseconds
   userId?: string;
+  source: ReportSource; // Source of the report: 'user' for user submissions, 'seed' for initial data, 'system' for automated
 }
 
 /**
@@ -127,55 +130,93 @@ export const getOfficeById = async (officeId: string): Promise<Office | null> =>
 };
 
 /**
- * Submit a crowd report
- * PROOF: This function writes to Firestore crowd_reports collection
+ * Submit a crowd report from user check-in
+ * PROOF: This function writes to Firestore crowd_reports collection with source="user"
  */
 export const submitCrowdReport = async (
   officeId: string,
   crowdLevel: CrowdLevel,
   userId?: string
 ): Promise<string> => {
-  console.log('[Firebase] Writing crowd report to Firestore:', { officeId, crowdLevel, userId });
+  console.log('[Firebase] Writing user crowd report to Firestore:', { officeId, crowdLevel, userId, source: 'user' });
   const reportsRef = collection(db, 'crowd_reports');
   const report = {
     officeId,
     crowdLevel,
     timestamp: Date.now(),
     userId: userId || null,
+    source: 'user' as ReportSource, // Mark as user-generated report
   };
   
   const docRef = await addDoc(reportsRef, report);
-  console.log('[Firebase] Crowd report written successfully:', { reportId: docRef.id, officeId });
+  console.log('[Firebase] User crowd report written successfully:', { reportId: docRef.id, officeId, source: 'user' });
   return docRef.id;
 };
 
 /**
- * Get recent crowd reports for an office
- * PROOF: This function queries Firestore crowd_reports collection
+ * Get recent crowd reports for an office within time window (30-60 minutes)
+ * Prioritizes user reports over seed/system reports
+ * PROOF: This function queries Firestore crowd_reports collection with time filtering
  */
 export const getRecentCrowdReports = async (
   officeId: string,
-  limitCount: number = 10
+  timeWindowMinutes: number = 60,
+  limitCount: number = 100
 ): Promise<CrowdReport[]> => {
-  console.log('[Firebase] Querying Firestore for crowd reports:', { officeId, limitCount });
+  const now = Date.now();
+  const timeWindowMs = timeWindowMinutes * 60 * 1000;
+  const cutoffTime = now - timeWindowMs;
+  
+  console.log('[Firebase] Querying Firestore for crowd reports:', { 
+    officeId, 
+    timeWindowMinutes,
+    cutoffTime: new Date(cutoffTime).toISOString(),
+    limitCount 
+  });
+  
   const reportsRef = collection(db, 'crowd_reports');
+  
+  // Firestore requires composite index for multiple where clauses with orderBy
+  // Query all reports for office, then filter by time in memory (more reliable)
   const q = query(
     reportsRef,
     where('officeId', '==', officeId),
     orderBy('timestamp', 'desc'),
-    limit(limitCount)
+    limit(limitCount * 2) // Get more to account for time filtering
   );
   
   const snapshot = await getDocs(q);
   
+  // Filter by time window and ensure source field exists (default to 'user' for backward compatibility)
+  const allReports = snapshot.docs
+    .map((doc) => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        officeId: data.officeId,
+        crowdLevel: data.crowdLevel,
+        timestamp: data.timestamp,
+        userId: data.userId || null,
+        source: (data.source || 'user') as 'user' | 'seed' | 'system', // Default to 'user' for old reports
+      };
+    })
+    .filter((r) => r.timestamp >= cutoffTime) // Filter by time window
+    .slice(0, limitCount) as CrowdReport[];
+  
+  // Prioritize user reports: put user reports first, then others
+  const userReports = allReports.filter(r => r.source === 'user');
+  const otherReports = allReports.filter(r => r.source !== 'user');
+  const prioritizedReports = [...userReports, ...otherReports];
+  
   console.log('[Firebase] Crowd reports retrieved:', {
     officeId,
-    reportsFound: snapshot.docs.length,
-    timestamps: snapshot.docs.map(doc => ({ id: doc.id, timestamp: doc.data().timestamp })),
+    totalReports: allReports.length,
+    userReports: userReports.length,
+    otherReports: otherReports.length,
+    timeWindow: `${timeWindowMinutes} minutes`,
+    oldestReport: allReports.length > 0 ? new Date(Math.min(...allReports.map(r => r.timestamp))).toISOString() : 'none',
+    newestReport: allReports.length > 0 ? new Date(Math.max(...allReports.map(r => r.timestamp))).toISOString() : 'none',
   });
   
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as CrowdReport[];
+  return prioritizedReports;
 };
