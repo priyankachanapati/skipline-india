@@ -100,26 +100,72 @@ export default function SearchPage() {
   // Handle location-based search
   const handleUseLocation = async () => {
     try {
+      console.log('[Location] Requesting user location...');
+      setError('');
+      
+      // Get user's current location
       const position = await getCurrentLocation();
       const lat = position.coords.latitude;
       const lon = position.coords.longitude;
+      
+      console.log('[Location] Location obtained:', { lat, lon });
       setUserLocation({ lat, lon });
       setUseLocation(true);
+      setLoading(true);
+
+      // If no city selected or no offices loaded, load all offices first
+      let officesToFilter = offices;
+      if (offices.length === 0) {
+        console.log('[Location] No offices loaded, fetching all offices...');
+        // Load offices from all major cities
+        const allOffices: Office[] = [];
+        for (const city of INDIAN_CITIES.slice(0, 5)) { // Limit to first 5 cities for performance
+          try {
+            const cityOffices = await getOfficesByCityAndType(city.toLowerCase(), undefined);
+            allOffices.push(...cityOffices);
+          } catch (err) {
+            console.error(`Error loading offices for ${city}:`, err);
+          }
+        }
+        officesToFilter = allOffices;
+        console.log('[Location] Loaded offices for filtering:', allOffices.length);
+      }
 
       // Filter offices by distance
-      const nearby = findNearbyOffices(lat, lon, offices, 10);
+      const nearby = findNearbyOffices(lat, lon, officesToFilter, 10);
+      console.log('[Location] Nearby offices found:', nearby.length);
+      
       const updatedData: Record<string, { crowdLevel: string; waitingTime: number; distance: number }> = {};
       
-      nearby.forEach((office) => {
-        const existing = officeData[office.id] || { crowdLevel: 'medium', waitingTime: 30 };
-        updatedData[office.id] = { ...existing, distance: office.distance };
-      });
+      // Load crowd data for nearby offices
+      for (const officeWithDistance of nearby) {
+        try {
+          const reports = await getRecentCrowdReports(officeWithDistance.id, 10);
+          const crowdLevel = calculateCrowdLevel(reports);
+          const waitingTime = estimateWaitingTime(crowdLevel);
+          updatedData[officeWithDistance.id] = { crowdLevel, waitingTime, distance: officeWithDistance.distance };
+        } catch (err) {
+          console.error(`Error loading crowd data for ${officeWithDistance.id}:`, err);
+          updatedData[officeWithDistance.id] = { 
+            crowdLevel: 'medium', 
+            waitingTime: 30, 
+            distance: officeWithDistance.distance 
+          };
+        }
+      }
 
       setOfficeData(updatedData);
       setOffices(nearby.map(({ distance, ...office }) => office));
-    } catch (err) {
-      setError('Could not get your location. Please enable location access.');
-      console.error('Location error:', err);
+      setSelectedCity(''); // Clear city filter since we're showing nearby offices
+      setLoading(false);
+      
+      if (nearby.length === 0) {
+        setError('No offices found within 10km of your location.');
+      }
+    } catch (err: any) {
+      console.error('[Location] Error:', err);
+      setError(`Could not get your location: ${err.message || 'Please enable location access in your browser settings.'}`);
+      setLoading(false);
     }
   };
 
@@ -176,14 +222,13 @@ export default function SearchPage() {
           </div>
         </div>
 
-        {selectedCity && (
-          <button
-            onClick={handleUseLocation}
-            className="w-full md:w-auto px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
-          >
-            📍 Find Offices Near Me
-          </button>
-        )}
+        <button
+          onClick={handleUseLocation}
+          disabled={loading}
+          className="w-full md:w-auto px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? '📍 Finding location...' : '📍 Find Offices Near Me'}
+        </button>
       </div>
 
       {/* Error Message */}
