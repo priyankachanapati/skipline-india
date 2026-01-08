@@ -1,5 +1,6 @@
 'use client';
 
+import { motion } from 'framer-motion';
 import { CrowdLevel } from '@/lib/firebase/firestore';
 
 interface CrowdIndicatorProps {
@@ -9,9 +10,18 @@ interface CrowdIndicatorProps {
 
 export default function CrowdIndicator({ level, size = 'md' }: CrowdIndicatorProps) {
   const colorMap = {
-    low: 'bg-green-500',
-    medium: 'bg-yellow-500',
-    high: 'bg-red-500',
+    low: {
+      bg: 'bg-crowd-low',
+      dot: 'bg-teal-300',
+    },
+    medium: {
+      bg: 'bg-crowd-medium',
+      dot: 'bg-amber-300',
+    },
+    high: {
+      bg: 'bg-crowd-high',
+      dot: 'bg-red-300',
+    },
   };
 
   const textMap = {
@@ -26,11 +36,56 @@ export default function CrowdIndicator({ level, size = 'md' }: CrowdIndicatorPro
     lg: 'text-base px-4 py-2',
   };
 
+  const colors = colorMap[level];
+  const isHigh = level === 'high';
+
   return (
-    <span
-      className={`inline-flex items-center rounded-full font-semibold text-white ${colorMap[level]} ${sizeMap[size]}`}
+    <motion.span
+      key={level}
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3, ease: 'easeOut' }}
+      className={`relative inline-flex items-center gap-1.5 rounded-full font-semibold text-white ${colors.bg} ${sizeMap[size]} ${isHigh ? 'shadow-lg' : ''}`}
     >
-      {textMap[level]} Crowd
-    </span>
+      {/* Animated live status dot */}
+      <motion.span
+        className={`w-1.5 h-1.5 rounded-full ${colors.dot}`}
+        animate={
+          isHigh
+            ? {
+                scale: [1, 1.4, 1],
+                opacity: [1, 0.6, 1],
+              }
+            : {
+                scale: [1, 1.2, 1],
+                opacity: [1, 0.7, 1],
+              }
+        }
+        transition={{
+          duration: isHigh ? 1.5 : 2,
+          repeat: Infinity,
+          ease: 'easeInOut',
+        }}
+      />
+      <span>{textMap[level]} Crowd</span>
+      {/* Subtle glow for high crowd */}
+      {isHigh && (
+        <motion.span
+          className="absolute inset-0 rounded-full -z-10"
+          animate={{
+            opacity: [0.3, 0.6, 0.3],
+            scale: [1, 1.05, 1],
+          }}
+          transition={{
+            duration: 2,
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
+          style={{
+            boxShadow: '0 0 20px rgba(239, 68, 68, 0.4)',
+          }}
+        />
+      )}
+    </motion.span>
   );
 }

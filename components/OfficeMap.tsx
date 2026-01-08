@@ -74,9 +74,9 @@ export default function OfficeMap({ office, height = '300px' }: OfficeMapProps) 
     return (
       <div
         style={{ height }}
-        className="w-full rounded-lg overflow-hidden border border-gray-200 bg-gray-100 flex items-center justify-center"
+        className="w-full rounded-xl overflow-hidden border border-white/10 bg-dark-800/50 flex items-center justify-center"
       >
-        <p className="text-gray-500 text-sm">Loading map...</p>
+        <p className="text-dark-400 text-sm">Loading map...</p>
       </div>
     );
   }
@@ -85,7 +85,7 @@ export default function OfficeMap({ office, height = '300px' }: OfficeMapProps) 
     <div
       ref={mapRef}
       style={{ height }}
-      className="w-full rounded-lg overflow-hidden border border-gray-200"
+      className="w-full rounded-xl overflow-hidden border border-white/10"
     />
   );
 }

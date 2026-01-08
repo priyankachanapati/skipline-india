@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { getOfficesByCityAndType, Office, OfficeType } from '@/lib/firebase/firestore';
 import { getRecentCrowdReports } from '@/lib/firebase/firestore';
 import { calculateCrowdLevel, estimateWaitingTime, aggregateCrowdData } from '@/lib/services/crowdAggregation';
 import OfficeCard from '@/components/OfficeCard';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { CardSkeleton } from '@/components/SkeletonLoader';
 import { getCurrentLocation, findNearbyOffices } from '@/lib/services/maps';
 
 // Major Indian cities
@@ -134,30 +136,24 @@ export default function SearchPage() {
       }
 
       // Filter offices by distance
-      const nearby = findNearbyOffices(lat, lon, officesToFilter, 10);
+      const nearby = findNearbyOffices<Office>(lat, lon, officesToFilter, 10);
       console.log('[Location] Nearby offices found:', nearby.length);
       
       const updatedData: Record<string, { crowdLevel: string; waitingTime: number; distance: number }> = {};
       
       // Load crowd data for nearby offices (aggregated from last 60 minutes)
       for (const officeWithDistance of nearby) {
-        const officeId = officeWithDistance.id;
-        if (!officeId) {
-          console.error('[Location] Office missing id:', officeWithDistance);
-          continue;
-        }
-        
         try {
-          const reports = await getRecentCrowdReports(officeId, 60, 100);
+          const reports = await getRecentCrowdReports(officeWithDistance.id, 60, 100);
           const aggregated = aggregateCrowdData(reports, 60);
-          updatedData[officeId] = { 
+          updatedData[officeWithDistance.id] = { 
             crowdLevel: aggregated.crowdLevel, 
             waitingTime: aggregated.averageWaitTime, 
             distance: officeWithDistance.distance 
           };
         } catch (err) {
-          console.error(`Error loading crowd data for ${officeId}:`, err);
-          updatedData[officeId] = { 
+          console.error(`Error loading crowd data for ${officeWithDistance.id}:`, err);
+          updatedData[officeWithDistance.id] = { 
             crowdLevel: 'medium', 
             waitingTime: 30, 
             distance: officeWithDistance.distance 
@@ -166,9 +162,7 @@ export default function SearchPage() {
       }
 
       setOfficeData(updatedData);
-      // Extract offices from nearby results (remove distance property)
-      const nearbyOffices: Office[] = nearby.map(({ distance, ...office }) => office);
-      setOffices(nearbyOffices);
+      setOffices(nearby.map(({ distance, ...office }) => office as Office));
       setSelectedCity(''); // Clear city filter since we're showing nearby offices
       setLoading(false);
       
@@ -192,20 +186,37 @@ export default function SearchPage() {
     : offices;
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">Find Government Offices</h1>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: 'easeOut' }}
+      className="max-w-4xl mx-auto"
+    >
+      <motion.h1
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.4 }}
+        className="text-3xl font-bold text-dark-50 mb-6"
+      >
+        Find Government Offices
+      </motion.h1>
 
       {/* Search Filters */}
-      <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2, duration: 0.4 }}
+        className="glass-card rounded-2xl shadow-soft p-4 mb-6"
+      >
         <div className="grid md:grid-cols-2 gap-4 mb-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-dark-300 mb-2">
               Select City
             </label>
             <select
               value={selectedCity}
               onChange={(e) => setSelectedCity(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-4 py-2 glass border border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 text-dark-200 bg-dark-800/50 transition-all"
             >
               <option value="">Choose a city...</option>
               {INDIAN_CITIES.map((city) => (
@@ -217,13 +228,13 @@ export default function SearchPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-dark-300 mb-2">
               Office Type
             </label>
             <select
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value as OfficeType | '')}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="w-full px-4 py-2 glass border border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 text-dark-200 bg-dark-800/50 transition-all disabled:opacity-50"
               disabled={!selectedCity}
             >
               {OFFICE_TYPES.map((type) => (
@@ -235,65 +246,108 @@ export default function SearchPage() {
           </div>
         </div>
 
-        <button
+        <motion.button
           onClick={handleUseLocation}
           disabled={loading}
-          className="w-full md:w-auto px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          whileHover={{ scale: loading ? 1 : 1.02 }}
+          whileTap={{ scale: loading ? 1 : 0.98 }}
+          className="w-full md:w-auto px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-400 transition-all text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-soft"
         >
           {loading ? '📍 Finding location...' : '📍 Find Offices Near Me'}
-        </button>
-      </div>
+        </motion.button>
+      </motion.div>
 
       {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
-          {error}
-        </div>
-      )}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="bg-crowd-high/20 border border-crowd-high/30 text-crowd-high px-4 py-3 rounded-xl mb-6 backdrop-blur-sm"
+          >
+            {error}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Loading State */}
-      {loading && <LoadingSpinner />}
+      {loading && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="space-y-3"
+        >
+          {[1, 2, 3].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </motion.div>
+      )}
 
       {/* Results */}
-      {!loading && selectedCity && sortedOffices.length === 0 && (
-        <div className="bg-white rounded-lg shadow-md p-8 text-center">
-          <p className="text-gray-600">
-            No offices found in {selectedCity}. Be the first to add one!
-          </p>
-        </div>
-      )}
+      <AnimatePresence mode="wait">
+        {!loading && selectedCity && sortedOffices.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="glass-card rounded-2xl shadow-soft p-8 text-center"
+          >
+            <p className="text-dark-300">
+              No offices found in {selectedCity}. Be the first to add one!
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Office List */}
       {!loading && sortedOffices.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="flex items-center justify-between mb-4"
+          >
+            <h2 className="text-xl font-semibold text-dark-50">
               {sortedOffices.length} Office{sortedOffices.length > 1 ? 's' : ''} Found
             </h2>
-            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+            <span className="text-xs text-dark-400 bg-dark-800 px-2 py-1 rounded-lg border border-white/10">
               📊 Data from Firebase Firestore
             </span>
-          </div>
-          {sortedOffices.map((office) => (
+          </motion.div>
+          {sortedOffices.map((office, index) => (
             <OfficeCard
               key={office.id}
               office={office}
               crowdLevel={officeData[office.id]?.crowdLevel as any}
               waitingTime={officeData[office.id]?.waitingTime}
               distance={officeData[office.id]?.distance}
+              index={index}
             />
           ))}
-        </div>
+        </motion.div>
       )}
 
       {/* Empty State */}
-      {!selectedCity && (
-        <div className="bg-white rounded-lg shadow-md p-8 text-center">
-          <p className="text-gray-600 mb-4">
-            Select a city to start searching for government offices
-          </p>
-        </div>
-      )}
-    </div>
+      <AnimatePresence>
+        {!selectedCity && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="glass-card rounded-2xl shadow-soft p-8 text-center"
+          >
+            <p className="text-dark-300 mb-4">
+              Select a city to start searching for government offices
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }

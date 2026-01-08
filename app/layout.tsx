@@ -20,14 +20,14 @@ export default function RootLayout({
           strategy="afterInteractive"
         />
       </head>
-      <body className="min-h-screen bg-gray-50">
-        <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-10">
+      <body className="min-h-screen bg-dark-900">
+        <nav className="glass sticky top-0 z-10 border-b border-white/10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
-              <a href="/" className="text-xl font-bold text-primary-600">
+              <a href="/" className="text-xl font-bold text-primary-400 hover:text-primary-300 transition-colors">
                 Queueless India
               </a>
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-dark-300">
                 🇮🇳 Skip the Queue
               </div>
             </div>
@@ -36,9 +36,9 @@ export default function RootLayout({
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {children}
         </main>
-        <footer className="bg-white border-t border-gray-200 mt-12">
+        <footer className="glass border-t border-white/10 mt-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <p className="text-center text-sm text-gray-600">
+            <p className="text-center text-sm text-dark-400">
               Made with ❤️ for India | Help others by reporting crowd levels
             </p>
           </div>

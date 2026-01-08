@@ -4,7 +4,6 @@ const nextConfig = {
   images: {
     domains: [],
   },
-  transpilePackages: ['firebase'],
 }
 
 module.exports = nextConfig
