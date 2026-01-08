@@ -23,7 +23,7 @@ export const generateCrowdExplanation = async (
       timeOfDay,
       dayOfWeek,
     });
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const officeTypeNames: Record<OfficeType, string> = {
       passport: 'Passport Office',
@@ -68,7 +68,7 @@ export const generateBestTimeSuggestion = async (
   city: string
 ): Promise<string> => {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const officeTypeNames: Record<OfficeType, string> = {
       passport: 'Passport Office',

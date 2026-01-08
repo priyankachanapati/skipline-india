@@ -20,6 +20,7 @@ import {
 import { getCurrentUser, signInAnon, signInWithGoogle } from '@/lib/firebase/auth';
 import { getOfficesByCity, Office as OfficeType } from '@/lib/firebase/firestore';
 import { calculateDistance } from '@/lib/services/maps';
+import { getSmartVisitAdvisory } from '@/lib/services/geminiAdvisory';
 import CrowdIndicator from '@/components/CrowdIndicator';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import OfficeMap from '@/components/OfficeMap';
@@ -39,9 +40,9 @@ export default function OfficeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [aiExplanation, setAiExplanation] = useState('');
-  const [bestTimeSuggestion, setBestTimeSuggestion] = useState('');
-  const [loadingAI, setLoadingAI] = useState(false);
+  const [advisory, setAdvisory] = useState('');
+  const [loadingAdvisory, setLoadingAdvisory] = useState(false);
+  const [advisoryError, setAdvisoryError] = useState('');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [nearbyOffices, setNearbyOffices] = useState<Office[]>([]);
@@ -90,6 +91,46 @@ export default function OfficeDetailPage() {
         setReportCount(aggregated.reportCount);
         setUserReportCount(aggregated.userReportCount);
 
+        // Load Smart Visit Advisory from Gemini (explanation only, based on aggregated data)
+        // IMPORTANT: Gemini does NOT generate crowd levels or wait times - only explains based on Firebase data
+        setLoadingAdvisory(true);
+        setAdvisoryError('');
+        try {
+          const now = new Date();
+          const timeOfDay = now.getHours() < 12 ? 'Morning' : now.getHours() < 17 ? 'Afternoon' : 'Evening';
+          const dayOfWeek = now.toLocaleDateString('en-IN', { weekday: 'long' });
+
+          console.log('[Smart Advisory] Requesting advisory with aggregated data:', {
+            officeType: officeData.type,
+            city: officeData.city,
+            aggregatedData: aggregated,
+            timeOfDay,
+            dayOfWeek,
+          });
+
+          const advisoryResult = await getSmartVisitAdvisory({
+            officeType: officeData.type,
+            city: officeData.city,
+            aggregatedData: aggregated,
+            timeOfDay,
+            dayOfWeek,
+          });
+
+          setAdvisory(advisoryResult.advisory);
+          setAdvisoryError(''); // Clear any previous errors
+          console.log('[Smart Advisory] Advisory received successfully');
+        } catch (err: any) {
+          console.error('[Smart Advisory] Error loading advisory:', {
+            error: err.message,
+            stack: err.stack,
+          });
+          // Don't set advisory or error - UI will show "temporarily unavailable" message
+          setAdvisory('');
+          setAdvisoryError('');
+        } finally {
+          setLoadingAdvisory(false);
+        }
+
         // Load nearby offices from same city
         setLoadingNearby(true);
         try {
@@ -126,67 +167,6 @@ export default function OfficeDetailPage() {
           setLoadingNearby(false);
         }
 
-        // Load AI explanations via API route (server-side Gemini)
-        setLoadingAI(true);
-        const now = new Date();
-        const timeOfDay = now.getHours() < 12 ? 'Morning' : now.getHours() < 17 ? 'Afternoon' : 'Evening';
-        const dayOfWeek = now.toLocaleDateString('en-IN', { weekday: 'long' });
-
-        try {
-          console.log('[Gemini] Calling Gemini API via route:', {
-            officeType: officeData.type,
-            crowdLevel: level,
-            city: officeData.city,
-            timeOfDay,
-            dayOfWeek,
-          });
-
-          // Call Gemini API via server-side route
-          const [explanationRes, suggestionRes] = await Promise.all([
-            fetch('/api/gemini/explanation', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                officeType: officeData.type,
-                crowdLevel: level,
-                city: officeData.city,
-                timeOfDay,
-                dayOfWeek,
-              }),
-            }),
-            fetch('/api/gemini/suggestion', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                officeType: officeData.type,
-                city: officeData.city,
-              }),
-            }),
-          ]);
-
-          if (explanationRes.ok) {
-            const explanationData = await explanationRes.json();
-            setAiExplanation(explanationData.explanation);
-            console.log('[Gemini] Explanation received from API');
-          } else {
-            throw new Error('Failed to get explanation');
-          }
-
-          if (suggestionRes.ok) {
-            const suggestionData = await suggestionRes.json();
-            setBestTimeSuggestion(suggestionData.suggestion);
-            console.log('[Gemini] Suggestion received from API');
-          } else {
-            throw new Error('Failed to get suggestion');
-          }
-        } catch (err) {
-          console.error('[Gemini] AI generation error:', err);
-          // Set fallback messages
-          setAiExplanation(`This ${officeData.type} office in ${officeData.city} is currently ${level === 'high' ? 'very busy' : level === 'medium' ? 'moderately busy' : 'less crowded'}. Government offices in India are typically busier during morning hours and weekdays.`);
-          setBestTimeSuggestion(`For ${officeData.type} offices in ${officeData.city}, it's generally best to visit during mid-week (Tuesday-Thursday) in the afternoon hours (2-4 PM) to avoid peak crowds.`);
-        } finally {
-          setLoadingAI(false);
-        }
       } catch (err) {
         setError('Failed to load office data');
         console.error('Error loading office:', err);
@@ -245,6 +225,36 @@ export default function OfficeDetailPage() {
       setLastUpdated(aggregated.lastUpdated);
       setReportCount(aggregated.reportCount);
       setUserReportCount(aggregated.userReportCount);
+
+      // Reload advisory with updated aggregated data
+      if (office) {
+        setLoadingAdvisory(true);
+        try {
+          const now = new Date();
+          const timeOfDay = now.getHours() < 12 ? 'Morning' : now.getHours() < 17 ? 'Afternoon' : 'Evening';
+          const dayOfWeek = now.toLocaleDateString('en-IN', { weekday: 'long' });
+
+          const advisoryResult = await getSmartVisitAdvisory({
+            officeType: office.type,
+            city: office.city,
+            aggregatedData: aggregated,
+            timeOfDay,
+            dayOfWeek,
+          });
+
+          setAdvisory(advisoryResult.advisory);
+          setAdvisoryError(''); // Clear any previous errors
+        } catch (err: any) {
+          console.error('[Smart Advisory] Error reloading advisory:', {
+            error: err.message,
+          });
+          // Don't set advisory - UI will show "temporarily unavailable" message
+          setAdvisory('');
+          setAdvisoryError('');
+        } finally {
+          setLoadingAdvisory(false);
+        }
+      }
 
       // Show success message
       alert(`Thank you! Your report has been submitted.\n\nReport Count: ${aggregated.reportCount}\nUser Reports: ${aggregated.userReportCount}`);
@@ -406,35 +416,34 @@ export default function OfficeDetailPage() {
         </div>
       </div>
 
-      {/* AI Explanation */}
-      {aiExplanation && (
+      {/* Smart Visit Advisory */}
+      {/* 
+        IMPORTANT: This section shows AI-powered advisory based on aggregated Firebase data.
+        Gemini does NOT generate crowd levels or wait times - it only explains and advises.
+        All factual data comes from Firebase aggregation logic.
+        Data Flow: Firebase → Aggregation → UI → Gemini (explanation only)
+      */}
+      {reportCount > 0 && (
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2">
             <h2 className="text-xl font-bold text-gray-900 flex items-center">
-              🤖 AI Insight
+              💡 Smart Visit Advisory
             </h2>
             <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
               Powered by Gemini
             </span>
           </div>
-          {loadingAI ? (
+          <p className="text-xs text-gray-500 mb-4">
+            Based on live reports and time-of-day patterns
+          </p>
+          {loadingAdvisory ? (
             <LoadingSpinner />
+          ) : advisory ? (
+            <p className="text-gray-700 leading-relaxed">{advisory}</p>
           ) : (
-            <p className="text-gray-700 leading-relaxed">{aiExplanation}</p>
-          )}
-        </div>
-      )}
-
-      {/* Best Time Suggestion */}
-      {bestTimeSuggestion && (
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-3 flex items-center">
-            ⏰ Best Time to Visit
-          </h2>
-          {loadingAI ? (
-            <LoadingSpinner />
-          ) : (
-            <p className="text-gray-700 leading-relaxed">{bestTimeSuggestion}</p>
+            <p className="text-gray-500 text-sm italic">
+              Advisory temporarily unavailable. Please check back later.
+            </p>
           )}
         </div>
       )}
