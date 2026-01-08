@@ -97,6 +97,40 @@ a {
   }
 }
 
+/* Dark theme select dropdown styling */
+select.select-dark {
+  color: rgb(245, 245, 250);
+  background-color: rgba(26, 26, 29, 0.5);
+}
+
+select.select-dark:focus {
+  outline: none;
+}
+
+/* Style select options (limited browser support - works in Chrome/Safari) */
+select.select-dark option {
+  background-color: rgb(26, 26, 29);
+  color: rgb(245, 245, 250);
+  padding: 8px;
+}
+
+/* Custom dropdown arrow for dark theme */
+select.select-dark {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a5b4fc' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 40px;
+}
+
+select.select-dark:disabled {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666670' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+}
+
+/* Hover state for select (where supported) */
+select.select-dark:hover {
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
 /* Mobile-first optimizations */
 @media (max-width: 640px) {
   body {

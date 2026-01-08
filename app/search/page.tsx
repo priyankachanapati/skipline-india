@@ -216,11 +216,11 @@ export default function SearchPage() {
             <select
               value={selectedCity}
               onChange={(e) => setSelectedCity(e.target.value)}
-              className="w-full px-4 py-2 glass border border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 text-dark-200 bg-dark-800/50 transition-all"
+              className="w-full px-4 py-2.5 glass border border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 text-dark-200 bg-dark-800/50 transition-all appearance-none cursor-pointer select-dark"
             >
-              <option value="">Choose a city...</option>
+              <option value="" className="bg-dark-800 text-dark-200">Choose a city...</option>
               {INDIAN_CITIES.map((city) => (
-                <option key={city} value={city}>
+                <option key={city} value={city} className="bg-dark-800 text-dark-200">
                   {city}
                 </option>
               ))}
@@ -234,11 +234,11 @@ export default function SearchPage() {
             <select
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value as OfficeType | '')}
-              className="w-full px-4 py-2 glass border border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 text-dark-200 bg-dark-800/50 transition-all disabled:opacity-50"
+              className="w-full px-4 py-2.5 glass border border-white/10 rounded-xl focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 text-dark-200 bg-dark-800/50 transition-all disabled:opacity-50 appearance-none cursor-pointer select-dark"
               disabled={!selectedCity}
             >
               {OFFICE_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>
+                <option key={type.value} value={type.value} className="bg-dark-800 text-dark-200">
                   {type.label}
                 </option>
               ))}
