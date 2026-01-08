@@ -8,12 +8,17 @@ service cloud.firestore {
     }
     
     // Crowd reports collection - public read, authenticated write
+    // For hackathon/demo: Allow writes if authenticated OR allow all writes (remove auth check for demo)
     match /crowd_reports/{reportId} {
       allow read: if true;
+      // Allow create if authenticated AND has required fields
+      // Also allow source field (user/seed/system)
       allow create: if request.auth != null 
                     && request.resource.data.keys().hasAll(['officeId', 'crowdLevel', 'timestamp'])
                     && request.resource.data.crowdLevel in ['low', 'medium', 'high']
-                    && request.resource.data.timestamp is int;
+                    && request.resource.data.timestamp is int
+                    && (!('source' in request.resource.data) || request.resource.data.source in ['user', 'seed', 'system'])
+                    && (!('userId' in request.resource.data) || request.resource.data.userId is string || request.resource.data.userId == null);
       allow update, delete: if false; // Reports are immutable
     }
   }

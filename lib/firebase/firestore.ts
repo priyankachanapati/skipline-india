@@ -138,19 +138,71 @@ export const submitCrowdReport = async (
   crowdLevel: CrowdLevel,
   userId?: string
 ): Promise<string> => {
-  console.log('[Firebase] Writing user crowd report to Firestore:', { officeId, crowdLevel, userId, source: 'user' });
-  const reportsRef = collection(db, 'crowd_reports');
-  const report = {
-    officeId,
-    crowdLevel,
-    timestamp: Date.now(),
-    userId: userId || null,
-    source: 'user' as ReportSource, // Mark as user-generated report
-  };
-  
-  const docRef = await addDoc(reportsRef, report);
-  console.log('[Firebase] User crowd report written successfully:', { reportId: docRef.id, officeId, source: 'user' });
-  return docRef.id;
+  try {
+    // Verify db is initialized
+    if (!db) {
+      throw new Error('Firestore database not initialized. Check Firebase configuration.');
+    }
+
+    // Verify user is authenticated (required by security rules)
+    if (typeof window !== 'undefined') {
+      const { getCurrentUser } = await import('./auth');
+      const user = getCurrentUser();
+      if (!user) {
+        throw new Error('User must be authenticated to submit reports. Please sign in.');
+      }
+    }
+
+    const timestamp = Date.now();
+    const report = {
+      officeId,
+      crowdLevel,
+      timestamp,
+      userId: userId || null,
+      source: 'user' as ReportSource, // Mark as user-generated report
+    };
+
+    console.log('[Firebase] Writing user crowd report to Firestore:', {
+      officeId,
+      crowdLevel,
+      userId: userId || 'anonymous',
+      source: 'user',
+      timestamp,
+      payload: report,
+    });
+
+    const reportsRef = collection(db, 'crowd_reports');
+    
+    // Validate payload before sending
+    if (!officeId || !crowdLevel || !timestamp) {
+      throw new Error(`Invalid payload: officeId=${officeId}, crowdLevel=${crowdLevel}, timestamp=${timestamp}`);
+    }
+
+    if (!['low', 'medium', 'high'].includes(crowdLevel)) {
+      throw new Error(`Invalid crowdLevel: ${crowdLevel}. Must be 'low', 'medium', or 'high'.`);
+    }
+
+    const docRef = await addDoc(reportsRef, report);
+    
+    console.log('[Firebase] User crowd report written successfully:', {
+      reportId: docRef.id,
+      officeId,
+      source: 'user',
+      timestamp: new Date(timestamp).toISOString(),
+    });
+    
+    return docRef.id;
+  } catch (error: any) {
+    console.error('[Firebase] Error submitting crowd report:', {
+      error: error.message,
+      code: error.code,
+      stack: error.stack,
+      officeId,
+      crowdLevel,
+      userId,
+    });
+    throw error; // Re-throw to let caller handle it
+  }
 };
 
 /**
@@ -191,16 +243,41 @@ export const getRecentCrowdReports = async (
   const allReports = snapshot.docs
     .map((doc) => {
       const data = doc.data();
+      // Handle timestamp: could be number or Firestore Timestamp
+      let timestamp: number;
+      if (typeof data.timestamp === 'number') {
+        timestamp = data.timestamp;
+      } else if (data.timestamp?.toMillis) {
+        timestamp = data.timestamp.toMillis();
+      } else {
+        console.warn('[Firebase] Invalid timestamp format in report:', { reportId: doc.id, timestamp: data.timestamp });
+        timestamp = Date.now(); // Fallback to current time
+      }
+      
       return {
         id: doc.id,
         officeId: data.officeId,
         crowdLevel: data.crowdLevel,
-        timestamp: data.timestamp,
+        timestamp: timestamp, // Ensure timestamp is a number
         userId: data.userId || null,
         source: (data.source || 'user') as 'user' | 'seed' | 'system', // Default to 'user' for old reports
       };
     })
-    .filter((r) => r.timestamp >= cutoffTime) // Filter by time window
+    .filter((r) => {
+      // Filter by time window - ensure timestamp is valid number
+      const isValid = r.timestamp && typeof r.timestamp === 'number' && r.timestamp >= cutoffTime;
+      if (!isValid && r.timestamp) {
+        const ageMinutes = (Date.now() - r.timestamp) / 1000 / 60;
+        console.warn('[Firebase] Report filtered out due to timestamp:', {
+          reportId: r.id,
+          timestamp: r.timestamp,
+          cutoffTime,
+          ageMinutes: ageMinutes.toFixed(2),
+          timeWindowMinutes,
+        });
+      }
+      return isValid;
+    })
     .slice(0, limitCount) as CrowdReport[];
   
   // Prioritize user reports: put user reports first, then others

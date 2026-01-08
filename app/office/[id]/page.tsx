@@ -209,12 +209,36 @@ export default function OfficeDetailPage() {
     setError('');
 
     try {
+      console.log('[UI] Submitting crowd report:', {
+        officeId,
+        crowdLevel: level,
+        isAuthenticated,
+      });
+
       const user = getCurrentUser();
-      await submitCrowdReport(officeId, level, user?.uid);
+      if (!user) {
+        throw new Error('User not authenticated. Please sign in again.');
+      }
+
+      console.log('[UI] User authenticated:', { uid: user.uid, isAnonymous: user.isAnonymous });
+
+      // Submit the report
+      const reportId = await submitCrowdReport(officeId, level, user.uid);
+      console.log('[UI] Report submitted successfully:', { reportId });
+
+      // Wait a moment for Firestore to process
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       // Reload crowd data with aggregation
+      console.log('[UI] Reloading crowd data after submission...');
       const reports = await getRecentCrowdReports(officeId, 60, 100);
+      console.log('[UI] Reports retrieved after submission:', {
+        totalReports: reports.length,
+        userReports: reports.filter(r => r.source === 'user').length,
+      });
+
       const aggregated = aggregateCrowdData(reports, 60);
+      console.log('[UI] Aggregated data after submission:', aggregated);
 
       setCrowdLevel(aggregated.crowdLevel);
       setWaitingTime(aggregated.averageWaitTime);
@@ -222,10 +246,30 @@ export default function OfficeDetailPage() {
       setReportCount(aggregated.reportCount);
       setUserReportCount(aggregated.userReportCount);
 
-      alert('Thank you! Your report has been submitted.');
-    } catch (err) {
-      setError('Failed to submit report. Please try again.');
-      console.error('Error submitting report:', err);
+      // Show success message
+      alert(`Thank you! Your report has been submitted.\n\nReport Count: ${aggregated.reportCount}\nUser Reports: ${aggregated.userReportCount}`);
+    } catch (err: any) {
+      const errorMessage = err?.message || 'Unknown error occurred';
+      console.error('[UI] Error submitting report:', {
+        error: errorMessage,
+        code: err?.code,
+        stack: err?.stack,
+        officeId,
+        level,
+      });
+      
+      // Show detailed error message
+      setError(`Failed to submit report: ${errorMessage}. Please check console for details.`);
+      
+      // Also log to console for debugging
+      if (err?.code) {
+        console.error('[UI] Firebase error code:', err.code);
+        if (err.code === 'permission-denied') {
+          setError('Permission denied. Please check Firestore security rules and ensure you are authenticated.');
+        } else if (err.code === 'unavailable') {
+          setError('Firestore is unavailable. Please check your internet connection.');
+        }
+      }
     } finally {
       setSubmitting(false);
     }

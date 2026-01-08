@@ -28,13 +28,32 @@ const firebaseConfig: FirebaseConfig = {
 
 if (typeof window !== 'undefined') {
   // Initialize Firebase only on client side
-  if (!getApps().length) {
-    app = initializeApp(firebaseConfig);
-  } else {
-    app = getApps()[0];
+  try {
+    if (!getApps().length) {
+      app = initializeApp(firebaseConfig);
+      console.log('[Firebase] Firebase app initialized');
+    } else {
+      app = getApps()[0];
+      console.log('[Firebase] Using existing Firebase app');
+    }
+    auth = getAuth(app);
+    db = getFirestore(app);
+    console.log('[Firebase] Firestore database initialized:', {
+      projectId: firebaseConfig.projectId,
+      dbInitialized: !!db,
+    });
+  } catch (error: any) {
+    console.error('[Firebase] Error initializing Firebase:', {
+      error: error.message,
+      code: error.code,
+      config: {
+        hasApiKey: !!firebaseConfig.apiKey,
+        hasProjectId: !!firebaseConfig.projectId,
+        hasAuthDomain: !!firebaseConfig.authDomain,
+      },
+    });
+    throw error;
   }
-  auth = getAuth(app);
-  db = getFirestore(app);
 }
 
 export { auth, db };
